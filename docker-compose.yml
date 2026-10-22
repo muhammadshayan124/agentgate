@@ -1,0 +1,27 @@
+# docker compose run --rm demo          the gate dogfooded on the simulated agent
+# docker compose run --rm test          the test suite
+# docker compose --profile experiment run --rm experiment   the 200-replication evaluation (~10 min)
+services:
+  demo:
+    build: { context: ., target: base }
+    command: ["demo", "--check"]
+
+  test:
+    build: { context: ., target: test }
+
+  gate-example:
+    build: { context: ., target: base }
+    volumes: ["./out:/app/out"]
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        agentgate run examples/support_desk.yaml --agent agentgate.sim:make_agent --seed 1 --out out/baseline.json &&
+        agentgate run examples/support_desk.yaml --agent agentgate.sim:make_agent --arg bug=runaway_loop --arg rate=0.5 --seed 2 --out out/candidate.json &&
+        (agentgate compare out/baseline.json out/candidate.json --markdown out/report.md; echo "gate exit code: $$?")
+
+  experiment:
+    profiles: ["experiment"]
+    build: { context: ., target: base }
+    volumes: ["./results:/app/results"]
+    entrypoint: ["python", "-m", "agentgate.experiments.seeded_bugs"]
+    command: ["--reps", "200", "--workers", "4", "--out", "results/seeded_bugs.json"]
